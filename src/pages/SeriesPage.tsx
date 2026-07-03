@@ -1,25 +1,30 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { useToast } from '../lib/toast'
 import { subscribeSeries } from '../lib/series'
 import {
   addAdjustmentRound,
   addGameRound,
+  addRamschRound,
   deleteRound,
   nextSeq,
   subscribeRounds,
   updateAdjustmentRound,
   updateGameRound,
+  updateRamschRound,
 } from '../lib/rounds'
 import { gamesPlayed, standings } from '../lib/scoring'
-import type { Round, RoundResult, Series } from '../lib/types'
+import { describeRamsch, formatGameLabel } from '../lib/gameValue'
+import type { GameSelection, RamschData, Round, RoundResult, Series } from '../lib/types'
 import AddRoundSheet from '../components/AddRoundSheet'
 import type { SheetPlayer } from '../components/AddRoundSheet'
-import { Avatar, FullScreenMessage, PageHeader, btnPrimary, formatSigned } from '../components/ui'
+import { Avatar, FullScreenMessage, PageHeader, RankBadge, btnPrimary, formatSigned } from '../components/ui'
 
 export default function SeriesPage() {
   const { id } = useParams()
   const { user } = useAuth()
+  const { toast } = useToast()
   const navigate = useNavigate()
   const [series, setSeries] = useState<Series | null | undefined>(undefined)
   const [rounds, setRounds] = useState<Round[]>([])
@@ -78,27 +83,48 @@ export default function SeriesPage() {
   const nameFor = (uid: string | null) =>
     (uid && series.playerInfo[uid]?.name) || 'Spieler'
 
-  const onSubmitGame = async (declarerUid: string, gameValue: number, result: RoundResult) => {
+  const onSubmitGame = async (
+    declarerUid: string,
+    gameValue: number,
+    result: RoundResult,
+    gameMeta?: GameSelection,
+  ) => {
     if (!id || !user) return
+    const editing = Boolean(sheet.editing)
     if (sheet.editing) {
-      await updateGameRound(id, sheet.editing.id, series.playerUids, declarerUid, gameValue, result)
+      await updateGameRound(id, sheet.editing.id, series.playerUids, declarerUid, gameValue, result, gameMeta)
     } else {
-      await addGameRound(id, user, series.playerUids, declarerUid, gameValue, result, nextSeq(rounds))
+      await addGameRound(id, user, series.playerUids, declarerUid, gameValue, result, nextSeq(rounds), gameMeta)
     }
+    toast(editing ? 'Runde aktualisiert' : 'Runde eingetragen')
+  }
+
+  const onSubmitRamsch = async (ramsch: RamschData) => {
+    if (!id || !user) return
+    const editing = Boolean(sheet.editing)
+    if (sheet.editing) {
+      await updateRamschRound(id, sheet.editing.id, series.playerUids, ramsch)
+    } else {
+      await addRamschRound(id, user, series.playerUids, ramsch, nextSeq(rounds))
+    }
+    toast(editing ? 'Ramsch aktualisiert' : 'Ramsch eingetragen')
   }
 
   const onSubmitAdjustment = async (points: Record<string, number>) => {
     if (!id || !user) return
+    const editing = Boolean(sheet.editing)
     if (sheet.editing) {
       await updateAdjustmentRound(id, sheet.editing.id, points)
     } else {
       await addAdjustmentRound(id, user, points, nextSeq(rounds))
     }
+    toast(editing ? 'Anpassung aktualisiert' : 'Anpassung eingetragen')
   }
 
   const onDelete = async () => {
     if (!id || !sheet.editing) return
     await deleteRound(id, sheet.editing.id)
+    toast('Runde gelöscht')
   }
 
   const shareUrl = `${window.location.origin}${window.location.pathname}#/join/${series.inviteCode}`
@@ -147,9 +173,11 @@ export default function SeriesPage() {
           {rows.map((r, i) => (
             <div
               key={r.uid}
-              className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t border-slate-100' : ''}`}
+              className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                i > 0 ? 'border-t border-slate-100' : ''
+              } ${i === 0 && played > 0 ? 'bg-amber-50' : ''}`}
             >
-              <span className="w-5 text-center text-sm font-bold text-slate-400">{i + 1}</span>
+              <RankBadge rank={i + 1} />
               <Avatar
                 name={series.playerInfo[r.uid]?.name ?? '?'}
                 photoURL={series.playerInfo[r.uid]?.photoURL}
@@ -222,11 +250,20 @@ export default function SeriesPage() {
                         <p className="truncate text-sm font-semibold text-slate-800">
                           {nameFor(round.declarerUid)}
                         </p>
-                        <p className="text-xs text-slate-500">
-                          Spielwert {round.gameValue} ·{' '}
+                        <p className="truncate text-xs text-slate-500">
+                          {round.gameMeta ? formatGameLabel(round.gameMeta) : `Spielwert ${round.gameValue}`} ·{' '}
                           <span className={round.result === 'won' ? 'text-emerald-600' : 'text-rose-600'}>
                             {round.result === 'won' ? 'gewonnen' : 'verloren'}
                           </span>
+                        </p>
+                      </>
+                    ) : round.type === 'ramsch' ? (
+                      <>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {round.ramsch?.durchmarschUid ? 'Durchmarsch' : 'Ramsch'}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">
+                          {round.ramsch ? describeRamsch(round.ramsch, nameFor) : 'Ramsch'}
                         </p>
                       </>
                     ) : (
@@ -254,6 +291,23 @@ export default function SeriesPage() {
                       {formatSigned(round.points[round.declarerUid] ?? 0)}
                     </span>
                   )}
+                  {round.type === 'ramsch' &&
+                    (() => {
+                      const vals = Object.values(round.points)
+                      const shown = round.ramsch?.durchmarschUid
+                        ? Math.max(0, ...vals)
+                        : Math.min(0, ...vals)
+                      if (shown === 0) return null
+                      return (
+                        <span
+                          className={`text-lg font-bold tabular-nums ${
+                            shown >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                          }`}
+                        >
+                          {formatSigned(shown)}
+                        </span>
+                      )
+                    })()}
                 </button>
               ))}
             </div>
@@ -276,6 +330,7 @@ export default function SeriesPage() {
           editing={sheet.editing}
           onClose={() => setSheet({ open: false, editing: null })}
           onSubmitGame={onSubmitGame}
+          onSubmitRamsch={onSubmitRamsch}
           onSubmitAdjustment={onSubmitAdjustment}
           onDelete={sheet.editing ? onDelete : undefined}
         />

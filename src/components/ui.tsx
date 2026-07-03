@@ -106,3 +106,22 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
 export function formatSigned(n: number): string {
   return (n > 0 ? '+' : '') + n.toString()
 }
+
+const MEDAL: Record<number, string> = {
+  1: 'bg-amber-400 text-amber-900',
+  2: 'bg-slate-300 text-slate-700',
+  3: 'bg-orange-300 text-orange-900',
+}
+
+/** Standings rank: a medal pill for the top three, a plain number otherwise. */
+export function RankBadge({ rank }: { rank: number }) {
+  const medal = MEDAL[rank]
+  if (medal) {
+    return (
+      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${medal}`}>
+        {rank}
+      </span>
+    )
+  }
+  return <span className="w-6 shrink-0 text-center text-sm font-bold text-slate-400">{rank}</span>
+}

@@ -5,7 +5,7 @@ import { subscribeSeries } from '../lib/series'
 import { subscribeRounds } from '../lib/rounds'
 import { gamesPlayed, standings } from '../lib/scoring'
 import type { Round, Series } from '../lib/types'
-import { Avatar, FullScreenMessage, PageHeader, formatSigned } from '../components/ui'
+import { Avatar, FullScreenMessage, PageHeader, RankBadge, formatSigned } from '../components/ui'
 
 export default function StatsPage() {
   const { id } = useParams()
@@ -46,14 +46,20 @@ export default function StatsPage() {
     )
   }
 
+  const played = gamesPlayed(rounds)
+
   return (
     <div className="min-h-dvh bg-slate-100">
       <PageHeader title="Statistik" onBack={() => navigate(`/series/${series.id}`)} />
       <main className="mx-auto max-w-md space-y-3 p-4">
-        <p className="px-1 text-sm text-slate-500">{gamesPlayed(rounds)} Spiele gespielt</p>
-        {rows.map((s) => (
-          <div key={s.uid} className="rounded-2xl bg-white p-4 shadow-sm">
+        <p className="px-1 text-sm text-slate-500">{played} Spiele gespielt</p>
+        {rows.map((s, i) => (
+          <div
+            key={s.uid}
+            className={`rounded-2xl bg-white p-4 shadow-sm ${i === 0 && played > 0 ? 'ring-2 ring-amber-300' : ''}`}
+          >
             <div className="flex items-center gap-3">
+              <RankBadge rank={i + 1} />
               <Avatar
                 name={series.playerInfo[s.uid]?.name ?? '?'}
                 photoURL={series.playerInfo[s.uid]?.photoURL}

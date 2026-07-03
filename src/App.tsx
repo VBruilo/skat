@@ -1,5 +1,6 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/auth'
+import { ToastProvider } from './lib/toast'
 import { isFirebaseConfigured } from './lib/firebase'
 import { FullScreenMessage, Spinner } from './components/ui'
 import LoginPage from './pages/LoginPage'
@@ -48,9 +49,11 @@ export default function App() {
   }
   return (
     <AuthProvider>
-      <HashRouter>
-        <Gate />
-      </HashRouter>
+      <ToastProvider>
+        <HashRouter>
+          <Gate />
+        </HashRouter>
+      </ToastProvider>
     </AuthProvider>
   )
 }

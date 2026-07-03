@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   onSnapshot,
   orderBy,
@@ -12,8 +13,8 @@ import {
 import type { DocumentData } from 'firebase/firestore'
 import type { User } from 'firebase/auth'
 import { db } from './firebase'
-import type { Round, RoundResult } from './types'
-import { computeGamePoints } from './scoring'
+import type { GameSelection, RamschData, Round, RoundResult } from './types'
+import { computeGamePoints, computeRamschPoints } from './scoring'
 
 function roundsCol(seriesId: string) {
   return collection(db, 'series', seriesId, 'rounds')
@@ -28,6 +29,8 @@ function toRound(id: string, data: DocumentData): Round {
     gameValue: data.gameValue ?? null,
     result: data.result ?? null,
     points: data.points ?? {},
+    ...(data.gameMeta ? { gameMeta: data.gameMeta as GameSelection } : {}),
+    ...(data.ramsch ? { ramsch: data.ramsch as RamschData } : {}),
     createdBy: data.createdBy ?? '',
     createdAt: data.createdAt ?? null,
   }
@@ -54,6 +57,7 @@ export async function addGameRound(
   gameValue: number,
   result: RoundResult,
   seq: number,
+  gameMeta?: GameSelection,
 ): Promise<void> {
   await addDoc(roundsCol(seriesId), {
     seq,
@@ -62,6 +66,8 @@ export async function addGameRound(
     gameValue,
     result,
     points: computeGamePoints(playerUids, declarerUid, gameValue, result),
+    // Only attach when present — Firestore is not set to ignore `undefined`.
+    ...(gameMeta ? { gameMeta } : {}),
     createdBy: user.uid,
     createdAt: serverTimestamp(),
   })
@@ -85,6 +91,44 @@ export async function addAdjustmentRound(
   })
 }
 
+export async function addRamschRound(
+  seriesId: string,
+  user: User,
+  playerUids: string[],
+  ramsch: RamschData,
+  seq: number,
+): Promise<void> {
+  await addDoc(roundsCol(seriesId), {
+    seq,
+    type: 'ramsch',
+    declarerUid: null,
+    gameValue: null,
+    result: null,
+    points: computeRamschPoints(playerUids, ramsch),
+    ramsch,
+    createdBy: user.uid,
+    createdAt: serverTimestamp(),
+  })
+}
+
+export async function updateRamschRound(
+  seriesId: string,
+  roundId: string,
+  playerUids: string[],
+  ramsch: RamschData,
+): Promise<void> {
+  await updateDoc(doc(roundsCol(seriesId), roundId), {
+    type: 'ramsch',
+    declarerUid: null,
+    gameValue: null,
+    result: null,
+    points: computeRamschPoints(playerUids, ramsch),
+    ramsch,
+    // Clear game-calculator meta if this round used to be a game.
+    gameMeta: deleteField(),
+  })
+}
+
 export async function updateGameRound(
   seriesId: string,
   roundId: string,
@@ -92,6 +136,7 @@ export async function updateGameRound(
   declarerUid: string,
   gameValue: number,
   result: RoundResult,
+  gameMeta?: GameSelection,
 ): Promise<void> {
   await updateDoc(doc(roundsCol(seriesId), roundId), {
     type: 'game',
@@ -99,6 +144,10 @@ export async function updateGameRound(
     gameValue,
     result,
     points: computeGamePoints(playerUids, declarerUid, gameValue, result),
+    // Attach fresh calculator meta, or clear any stale meta on a manual edit.
+    // Also clear ramsch if this round used to be a Ramsch.
+    gameMeta: gameMeta ?? deleteField(),
+    ramsch: deleteField(),
   })
 }
 
@@ -113,6 +162,9 @@ export async function updateAdjustmentRound(
     gameValue: null,
     result: null,
     points,
+    // Clear any meta left over from a game/ramsch round being re-typed.
+    gameMeta: deleteField(),
+    ramsch: deleteField(),
   })
 }
 
