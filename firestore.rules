@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Lightweight public profile per user (name/photo). Owner-writable.
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Invite code -> seriesId lookup. Readable so a joiner can resolve a code.
+    match /invites/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if false;
+    }
+
+    match /series/{seriesId} {
+      function isMember() {
+        return signedIn() && request.auth.uid in resource.data.playerUids;
+      }
+      // A non-member may add ONLY themselves, and only while there is room.
+      function isJoining() {
+        return signedIn()
+          && !(request.auth.uid in resource.data.playerUids)
+          && resource.data.playerUids.size() < 3
+          && request.resource.data.playerUids.size() == resource.data.playerUids.size() + 1
+          && request.resource.data.playerUids.hasAll(resource.data.playerUids)
+          && (request.auth.uid in request.resource.data.playerUids);
+      }
+
+      allow read: if isMember();
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.playerUids == [request.auth.uid];
+      allow update: if isMember() || isJoining();
+      allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
+
+      match /rounds/{roundId} {
+        function memberOfSeries() {
+          return signedIn()
+            && request.auth.uid in get(/databases/$(database)/documents/series/$(seriesId)).data.playerUids;
+        }
+        allow read, write: if memberOfSeries();
+      }
+    }
+  }
+}
