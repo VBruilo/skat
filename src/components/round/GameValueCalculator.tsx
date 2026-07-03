@@ -22,6 +22,9 @@ const QUICK_VALUES = [18, 20, 22, 23, 24, 27, 30, 33, 35, 36, 40, 46, 48, 60]
 
 const DEFAULT_SEL: GameSelection = { kind: 'grand', matadors: 1, withMatadors: true }
 
+// Legal Spitzen range: Grand has 4 trumps (the Jacks), suit games up to 11.
+const MAX_MATADORS = { grand: 4, suit: 11 } as const
+
 const SUITS: Suit[] = ['karo', 'herz', 'pik', 'kreuz']
 const SUIT_SYMBOL: Record<Suit, string> = { karo: '♦', herz: '♥', pik: '♠', kreuz: '♣' }
 
@@ -83,7 +86,8 @@ export default function GameValueCalculator({ initialSelection, initialManualVal
     setSel((s) => {
       if (kind === 'suit') return { ...s, kind, suit: s.suit ?? 'kreuz' }
       if (kind === 'null') return { ...s, kind, nullVariant: s.nullVariant ?? 'null' }
-      return { ...s, kind }
+      // Grand has at most 4 Spitzen (the four Jacks); clamp when coming from a suit game.
+      return { ...s, kind, matadors: Math.min(MAX_MATADORS.grand, s.matadors ?? 1) }
     })
 
   const patch = (p: Partial<GameSelection>) => setSel((s) => ({ ...s, ...p }))
@@ -126,6 +130,8 @@ export default function GameValueCalculator({ initialSelection, initialManualVal
   const forcedHand = Boolean(sel.ouvert)
   const forcedSchneider = Boolean(sel.ouvert || sel.schwarz)
   const forcedSchwarz = Boolean(sel.ouvert)
+  const matadors = sel.matadors ?? 1
+  const maxMatadors = sel.kind === 'grand' ? MAX_MATADORS.grand : MAX_MATADORS.suit
 
   return (
     <div className="space-y-3">
@@ -189,17 +195,21 @@ export default function GameValueCalculator({ initialSelection, initialManualVal
               <button
                 type="button"
                 aria-label="weniger Spitzen"
-                onClick={() => patch({ matadors: Math.max(1, (sel.matadors ?? 1) - 1) })}
-                className="h-8 w-8 rounded-lg text-xl font-bold text-slate-500 active:bg-slate-100"
+                disabled={matadors <= 1}
+                onClick={() => patch({ matadors: Math.max(1, matadors - 1) })}
+                className="h-8 w-8 rounded-lg text-xl font-bold text-slate-500 active:bg-slate-100 disabled:opacity-30"
               >
                 −
               </button>
-              <span className="text-base font-bold text-slate-800">{sel.matadors ?? 1} Spitzen</span>
+              <span className="text-base font-bold text-slate-800">
+                {matadors} {matadors === 1 ? 'Spitze' : 'Spitzen'}
+              </span>
               <button
                 type="button"
                 aria-label="mehr Spitzen"
-                onClick={() => patch({ matadors: (sel.matadors ?? 1) + 1 })}
-                className="h-8 w-8 rounded-lg text-xl font-bold text-slate-500 active:bg-slate-100"
+                disabled={matadors >= maxMatadors}
+                onClick={() => patch({ matadors: Math.min(maxMatadors, matadors + 1) })}
+                className="h-8 w-8 rounded-lg text-xl font-bold text-slate-500 active:bg-slate-100 disabled:opacity-30"
               >
                 +
               </button>
