@@ -22,8 +22,9 @@ const QUICK_VALUES = [18, 20, 22, 23, 24, 27, 30, 33, 35, 36, 40, 46, 48, 60]
 
 const DEFAULT_SEL: GameSelection = { kind: 'grand', matadors: 1, withMatadors: true }
 
-// Legal Spitzen range: Grand has 4 trumps (the Jacks), suit games up to 11.
-const MAX_MATADORS = { grand: 4, suit: 11 } as const
+// House rule: only the four Jacks count as Spitzen, so the calculator caps at 4
+// for every game. Higher suit games (mit 5+) go through manual entry.
+const MAX_MATADORS = 4
 
 const SUITS: Suit[] = ['karo', 'herz', 'pik', 'kreuz']
 const SUIT_SYMBOL: Record<Suit, string> = { karo: '♦', herz: '♥', pik: '♠', kreuz: '♣' }
@@ -86,8 +87,7 @@ export default function GameValueCalculator({ initialSelection, initialManualVal
     setSel((s) => {
       if (kind === 'suit') return { ...s, kind, suit: s.suit ?? 'kreuz' }
       if (kind === 'null') return { ...s, kind, nullVariant: s.nullVariant ?? 'null' }
-      // Grand has at most 4 Spitzen (the four Jacks); clamp when coming from a suit game.
-      return { ...s, kind, matadors: Math.min(MAX_MATADORS.grand, s.matadors ?? 1) }
+      return { ...s, kind, matadors: Math.min(MAX_MATADORS, s.matadors ?? 1) }
     })
 
   const patch = (p: Partial<GameSelection>) => setSel((s) => ({ ...s, ...p }))
@@ -131,7 +131,7 @@ export default function GameValueCalculator({ initialSelection, initialManualVal
   const forcedSchneider = Boolean(sel.ouvert || sel.schwarz)
   const forcedSchwarz = Boolean(sel.ouvert)
   const matadors = sel.matadors ?? 1
-  const maxMatadors = sel.kind === 'grand' ? MAX_MATADORS.grand : MAX_MATADORS.suit
+  const maxMatadors = MAX_MATADORS
 
   return (
     <div className="space-y-3">
