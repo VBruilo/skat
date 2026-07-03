@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { createSeries } from '../lib/series'
+import { firebaseErrorMessage } from '../lib/errors'
 import { PageHeader, btnPrimary } from '../components/ui'
 
 export default function CreateSeriesPage() {
@@ -25,8 +26,9 @@ export default function CreateSeriesPage() {
       setBusy(true)
       const id = await createSeries(user, name, targetRounds)
       navigate(`/series/${id}`, { replace: true })
-    } catch {
-      setError('Serie konnte nicht angelegt werden.')
+    } catch (e) {
+      console.error(e)
+      setError(firebaseErrorMessage(e))
       setBusy(false)
     }
   }

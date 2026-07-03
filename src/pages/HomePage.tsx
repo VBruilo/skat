@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { subscribeMySeries } from '../lib/series'
+import { firebaseErrorMessage } from '../lib/errors'
 import type { Series } from '../lib/types'
 import { Avatar, Card, PageHeader, btnGhost, btnPrimary, btnSecondary } from '../components/ui'
 
@@ -9,10 +10,15 @@ export default function HomePage() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const [series, setSeries] = useState<Series[] | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) return
-    return subscribeMySeries(user.uid, setSeries)
+    setLoadError(null)
+    return subscribeMySeries(user.uid, setSeries, (e) => {
+      console.error(e)
+      setLoadError(firebaseErrorMessage(e))
+    })
   }, [user])
 
   if (!user) return null
@@ -46,7 +52,12 @@ export default function HomePage() {
           </button>
         </div>
 
-        {series === null ? (
+        {loadError ? (
+          <Card className="text-center">
+            <p className="font-medium text-rose-600">Runden konnten nicht geladen werden.</p>
+            <p className="mt-1 text-sm text-slate-500">{loadError}</p>
+          </Card>
+        ) : series === null ? (
           <div className="flex justify-center py-10">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-600" />
           </div>

@@ -84,13 +84,21 @@ export async function joinSeriesByCode(user: User, rawCode: string): Promise<str
   return seriesId
 }
 
-export function subscribeMySeries(uid: string, cb: (series: Series[]) => void): () => void {
+export function subscribeMySeries(
+  uid: string,
+  cb: (series: Series[]) => void,
+  onError?: (e: Error) => void,
+): () => void {
   const q = query(collection(db, 'series'), where('playerUids', 'array-contains', uid))
-  return onSnapshot(q, (snap) => {
-    const list = snap.docs.map((d) => toSeries(d.id, d.data()))
-    list.sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))
-    cb(list)
-  })
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map((d) => toSeries(d.id, d.data()))
+      list.sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))
+      cb(list)
+    },
+    (err) => onError?.(err),
+  )
 }
 
 export function subscribeSeries(id: string, cb: (series: Series | null) => void): () => void {
